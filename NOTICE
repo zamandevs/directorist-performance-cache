@@ -3,4 +3,4 @@ Copyright (C) 2026 Zaman Devs
 
 Licensed under GPL-2.0-or-later. See LICENSE.txt.
 
-Architectural references and pinned source provenance are documented in UPSTREAM.md. No complete third-party cache engine is bundled in PC05.
+Architectural references and pinned source provenance are documented in UPSTREAM.md. No complete third-party cache engine is bundled.

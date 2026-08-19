@@ -55,8 +55,7 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
             return is_object( $engine )
                 && is_callable( [ $engine, 'is_available' ] )
                 && $engine->is_available()
-                && is_callable( [ $engine, 'invalidate' ] )
-                && is_callable( [ $engine, 'warm' ] );
+                && is_callable( [ $engine, 'invalidate' ] );
         } catch ( \Throwable $exception ) {
             unset( $exception );
 
@@ -66,14 +65,25 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
 
     /** @return string[] */
     public function get_capabilities() {
-        return [
+        $capabilities = [
             'purge_dependencies',
             'purge_generations',
             'purge_site',
             'purge_url',
             'purge_urls',
-            'warm_urls',
         ];
+
+        try {
+            $engine = $this->resolve_engine();
+
+            if ( is_object( $engine ) && is_callable( [ $engine, 'supports_warm' ] ) && $engine->supports_warm() ) {
+                $capabilities[] = 'warm_urls';
+            }
+        } catch ( \Throwable $exception ) {
+            unset( $exception );
+        }
+
+        return $capabilities;
     }
 
     /**
@@ -103,6 +113,10 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
     public function warm( array $urls ) {
         if ( ! $this->is_available() ) {
             return $this->result( false, 'engine_unavailable' );
+        }
+
+        if ( ! $this->supports( 'warm_urls' ) ) {
+            return $this->result( false, 'capability_unavailable' );
         }
 
         return $this->call_engine( 'warm', [ $urls ] );
