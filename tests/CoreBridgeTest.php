@@ -12,6 +12,8 @@ final class Directorist_Performance_Cache_Test_Engine {
 
     public $warms = [];
 
+    public $warming = true;
+
     public function is_available() {
         return true;
     }
@@ -26,6 +28,10 @@ final class Directorist_Performance_Cache_Test_Engine {
         $this->warms[] = $urls;
 
         return [ 'success' => true, 'code' => 'engine_warmed' ];
+    }
+
+    public function supports_warm() {
+        return $this->warming;
     }
 
     public function get_status() {
@@ -123,6 +129,25 @@ final class Directorist_Performance_Cache_Core_Bridge_Test extends TestCase {
         $this->assertFalse( $unhealthy->is_available() );
         $this->assertFalse( $throwing->is_available() );
         $this->assertSame( 'engine_unavailable', $throwing->invalidate( [] )['code'] );
+    }
+
+    public function test_provider_does_not_advertise_or_dispatch_unimplemented_warming() {
+        $this->define_core_interface();
+        $engine          = new Directorist_Performance_Cache_Test_Engine();
+        $engine->warming = false;
+        $provider        = new Core_Provider(
+            static function () use ( $engine ) {
+                return $engine;
+            },
+            static function () {
+                return true;
+            }
+        );
+
+        $this->assertTrue( $provider->is_available() );
+        $this->assertFalse( $provider->supports( 'warm_urls' ) );
+        $this->assertSame( 'capability_unavailable', $provider->warm( [ 'https://example.org/directory/' ] )['code'] );
+        $this->assertSame( [], $engine->warms );
     }
 
     private function define_core_interface() {

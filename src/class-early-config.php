@@ -34,6 +34,9 @@ final class Early_Config {
             'bootstrap_file' => $this->plugin_dir . '/src/early-bootstrap.php',
             'engine_file'    => $this->plugin_dir . '/src/class-cache-engine.php',
             'cache_dir'      => $this->content_dir . '/cache/directorist-performance-cache',
+            'ttl'            => 3600,
+            'stale_ttl'      => 30,
+            'debug'          => false,
         ];
     }
 
