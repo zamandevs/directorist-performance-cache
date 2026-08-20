@@ -215,6 +215,34 @@ final class Directorist_Performance_Cache_Cache_Engine_Test extends TestCase {
         $this->assertSame( 'warming_unavailable', $engine->warm( [ 'https://example.test/directory/' ] )['code'] );
     }
 
+    public function test_warming_is_advertised_only_after_a_handler_is_attached_and_failures_are_contained() {
+        $engine = $this->engine();
+        $calls  = [];
+
+        $this->assertFalse( $engine->set_warm_handler( 'not-callable' ) );
+        $this->assertTrue(
+            $engine->set_warm_handler(
+                static function ( array $urls ) use ( &$calls ) {
+                    $calls[] = $urls;
+
+                    return [ 'success' => true, 'code' => 'queued' ];
+                }
+            )
+        );
+        $this->assertTrue( $engine->supports_warm() );
+        $this->assertTrue( $engine->get_status()['warm_ready'] );
+        $this->assertSame( 'queued', $engine->warm( [ 'https://example.test/directory/' ] )['code'] );
+        $this->assertSame( [ [ 'https://example.test/directory/' ] ], $calls );
+
+        $throwing = $this->engine();
+        $throwing->set_warm_handler(
+            static function () {
+                throw new RuntimeException( 'queue failed' );
+            }
+        );
+        $this->assertSame( 'warming_exception', $throwing->warm( [] )['code'] );
+    }
+
     private function engine( array $overrides = [] ) {
         $config = array_merge(
             [

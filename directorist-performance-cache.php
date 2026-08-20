@@ -3,7 +3,7 @@
  * Plugin Name: Directorist Performance Cache
  * Plugin URI: https://github.com/zamandevs/directorist-performance-cache
  * Description: Optional dependency-aware fallback page cache for Directorist.
- * Version: 0.2.0
+ * Version: 0.3.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * Author: Zaman Devs
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'DIRECTORIST_PERFORMANCE_CACHE_VERSION', '0.2.0' );
+define( 'DIRECTORIST_PERFORMANCE_CACHE_VERSION', '0.3.0' );
 define( 'DIRECTORIST_PERFORMANCE_CACHE_FILE', __FILE__ );
 define( 'DIRECTORIST_PERFORMANCE_CACHE_DIR', __DIR__ );
 
@@ -72,6 +72,21 @@ function directorist_performance_cache_bump_lifecycle_generation() {
     return $storage->bump_generations( [ 'directorist:0:lifecycle' ] );
 }
 
+/** @return Directorist\Performance_Cache\Runtime_Controller */
+function directorist_performance_cache_controller() {
+    static $controller;
+
+    if ( ! $controller instanceof Directorist\Performance_Cache\Runtime_Controller ) {
+        $root       = WP_CONTENT_DIR . '/cache/directorist-performance-cache';
+        $engine     = directorist_performance_cache_engine();
+        $queue      = new Directorist\Performance_Cache\Warm_Queue( $root, home_url( '/' ) );
+        $cleaner    = new Directorist\Performance_Cache\Cache_Cleaner( $root );
+        $controller = new Directorist\Performance_Cache\Runtime_Controller( $engine, $queue, $cleaner );
+    }
+
+    return $controller;
+}
+
 /**
  * @param bool $network_wide Whether activation is network-wide.
  * @return void
@@ -90,6 +105,8 @@ function directorist_performance_cache_activate( $network_wide = false ) {
             ];
         } else {
             $result['lifecycle_generation'] = $generation['code'];
+            $schedules = directorist_performance_cache_controller()->activate();
+            $result['schedules'] = $schedules['code'];
         }
     }
 
@@ -109,14 +126,17 @@ function directorist_performance_cache_activate( $network_wide = false ) {
 
 /** @return void */
 function directorist_performance_cache_deactivate() {
+    $schedules = directorist_performance_cache_controller()->deactivate();
     $generation = directorist_performance_cache_bump_lifecycle_generation();
     $result = directorist_performance_cache_lifecycle()->deactivate();
     $result['lifecycle_generation'] = $generation['code'];
+    $result['schedules'] = $schedules['code'];
     update_site_option( 'directorist_performance_cache_status', $result );
 }
 
 /** @return void */
 function directorist_performance_cache_uninstall() {
+    directorist_performance_cache_controller()->deactivate();
     directorist_performance_cache_bump_lifecycle_generation();
     $result = directorist_performance_cache_lifecycle()->uninstall();
 
@@ -154,6 +174,7 @@ directorist_performance_cache_engine(
         'debug'     => false,
     ]
 )->register_wordpress_hooks();
+directorist_performance_cache_controller()->register_wordpress_hooks();
 register_activation_hook( __FILE__, 'directorist_performance_cache_activate' );
 register_deactivation_hook( __FILE__, 'directorist_performance_cache_deactivate' );
 register_uninstall_hook( __FILE__, 'directorist_performance_cache_uninstall' );
