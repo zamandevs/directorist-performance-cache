@@ -58,6 +58,9 @@ namespace Directorist\Performance_Cache {
         /** @var array|null */
         private $early_result;
 
+        /** @var callable|null */
+        private $warm_handler;
+
         /**
          * @param array $config Early engine configuration.
          * @param array $options Testable runtime boundaries.
@@ -357,9 +360,25 @@ namespace Directorist\Performance_Cache {
             ];
         }
 
+        /**
+         * Attach the late WordPress queue boundary after the plugin loads.
+         *
+         * @param callable $handler Warm queue handler.
+         * @return bool
+         */
+        public function set_warm_handler( $handler ) {
+            if ( ! is_callable( $handler ) ) {
+                return false;
+            }
+
+            $this->warm_handler = $handler;
+
+            return true;
+        }
+
         /** @return bool */
         public function supports_warm() {
-            return false;
+            return is_callable( $this->warm_handler );
         }
 
         /**
@@ -367,9 +386,19 @@ namespace Directorist\Performance_Cache {
          * @return array
          */
         public function warm( array $urls ) {
-            unset( $urls );
+            if ( ! $this->supports_warm() ) {
+                return $this->operation_result( false, 'warming_unavailable' );
+            }
 
-            return $this->operation_result( false, 'warming_unavailable' );
+            try {
+                $result = call_user_func( $this->warm_handler, $urls );
+            } catch ( \Throwable $exception ) {
+                unset( $exception );
+
+                return $this->operation_result( false, 'warming_exception' );
+            }
+
+            return is_array( $result ) ? $result : $this->operation_result( false, 'invalid_warming_result' );
         }
 
         /** @return array */
@@ -378,7 +407,7 @@ namespace Directorist\Performance_Cache {
                 'available'  => $this->is_available(),
                 'prepared'   => $this->regeneration,
                 'capturing'  => $this->capture_started,
-                'warm_ready' => false,
+                'warm_ready' => $this->supports_warm(),
             ];
         }
 
