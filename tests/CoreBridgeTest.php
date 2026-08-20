@@ -150,6 +150,25 @@ final class Directorist_Performance_Cache_Core_Bridge_Test extends TestCase {
         $this->assertSame( [], $engine->warms );
     }
 
+    public function test_provider_is_unavailable_when_early_cache_is_disabled() {
+        $this->define_core_interface();
+        $engine   = new Directorist_Performance_Cache_Test_Engine();
+        $provider = new Core_Provider(
+            static function () use ( $engine ) {
+                return $engine;
+            },
+            static function () {
+                return true;
+            },
+            static function () {
+                return false;
+            }
+        );
+
+        $this->assertFalse( $provider->is_available() );
+        $this->assertSame( 'integration_disabled', $provider->get_status()['code'] );
+    }
+
     private function define_core_interface() {
         if ( interface_exists( 'Directorist\\Cache\\Cache_Provider', false ) ) {
             return;

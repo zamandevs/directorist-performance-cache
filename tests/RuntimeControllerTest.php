@@ -116,6 +116,27 @@ final class Directorist_Performance_Cache_Runtime_Controller_Test extends TestCa
         $this->assertSame( 1200, $verified['cleanup_scheduled'] );
     }
 
+    public function test_worker_and_cleanup_report_only_operational_failures() {
+        $events     = [];
+        $controller = $this->controller(
+            [
+                'requester' => static function () {
+                    return [ 'success' => false, 'code' => 'http_failed_500' ];
+                },
+                'reporter'  => static function ( $level, $code, $context ) use ( &$events ) {
+                    $events[] = [ $level, $code, $context ];
+                },
+            ]
+        );
+
+        $controller->enqueue( [ 'https://example.test/fails/' ] );
+        $controller->run_worker();
+
+        $this->assertCount( 1, $events );
+        $this->assertSame( 'warning', $events[0][0] );
+        $this->assertSame( 'warm-worker-retry', $events[0][1] );
+    }
+
     private function controller( array $options = [] ) {
         $clock = function () {
             return $this->now;

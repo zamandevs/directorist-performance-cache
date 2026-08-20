@@ -12,6 +12,9 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
     /** @var callable */
     private $health_resolver;
 
+    /** @var callable */
+    private $enabled_resolver;
+
     /** @var bool */
     private $engine_resolved = false;
 
@@ -21,8 +24,9 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
     /**
      * @param callable|null $engine_resolver Engine resolver.
      * @param callable|null $health_resolver Ownership health resolver.
+     * @param callable|null $enabled_resolver Early-cache state resolver.
      */
-    public function __construct( $engine_resolver = null, $health_resolver = null ) {
+    public function __construct( $engine_resolver = null, $health_resolver = null, $enabled_resolver = null ) {
         $this->engine_resolver = is_callable( $engine_resolver ) ? $engine_resolver : static function () {
             return function_exists( 'directorist_performance_cache_engine' ) ? directorist_performance_cache_engine() : null;
         };
@@ -36,6 +40,21 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
 
             return 'owned' === $status['dropin'] && 'owned' === $status['config'];
         };
+        $this->enabled_resolver = is_callable( $enabled_resolver ) ? $enabled_resolver : static function () {
+            if ( isset( $GLOBALS['directorist_performance_cache_early_config'] ) && is_array( $GLOBALS['directorist_performance_cache_early_config'] ) ) {
+                $config = $GLOBALS['directorist_performance_cache_early_config'];
+
+                return ! array_key_exists( 'enabled', $config ) || ! empty( $config['enabled'] );
+            }
+
+            if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+                return true;
+            }
+
+            $status = ( new Early_Config_Manager( WP_CONTENT_DIR . '/cache/directorist-performance-cache/config.json' ) )->status();
+
+            return ! empty( $status['success'] ) && ! empty( $status['enabled'] );
+        };
     }
 
     /** @return string */
@@ -46,6 +65,10 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
     /** @return bool */
     public function is_available() {
         try {
+            if ( ! call_user_func( $this->enabled_resolver ) ) {
+                return false;
+            }
+
             if ( ! call_user_func( $this->health_resolver ) ) {
                 return false;
             }
@@ -124,14 +147,22 @@ final class Core_Provider implements \Directorist\Cache\Cache_Provider {
 
     /** @return array */
     public function get_status() {
+        try {
+            $enabled = (bool) call_user_func( $this->enabled_resolver );
+        } catch ( \Throwable $exception ) {
+            unset( $exception );
+            $enabled = false;
+        }
+
         $status = [
             'id'           => $this->get_id(),
             'available'    => $this->is_available(),
             'capabilities' => $this->get_capabilities(),
+            'enabled'      => $enabled,
         ];
 
         if ( ! $status['available'] ) {
-            $status['code'] = 'engine_unavailable';
+            $status['code'] = $enabled ? 'engine_unavailable' : 'integration_disabled';
 
             return $status;
         }

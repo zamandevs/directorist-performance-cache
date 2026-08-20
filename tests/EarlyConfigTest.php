@@ -40,6 +40,7 @@ final class Directorist_Performance_Cache_Early_Config_Test extends TestCase {
 
         $this->assertIsArray( $decoded );
         $this->assertTrue( Early_Config::is_valid( $decoded ) );
+        $this->assertTrue( $decoded['enabled'] );
         $this->assertStringNotContainsString( '<?php', $rendered );
         $this->assertLessThan( 32768, strlen( $rendered ) );
     }
