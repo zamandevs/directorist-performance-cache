@@ -37,6 +37,7 @@ final class Early_Config {
             'ttl'            => 3600,
             'stale_ttl'      => 30,
             'debug'          => false,
+            'enabled'        => true,
         ];
     }
 

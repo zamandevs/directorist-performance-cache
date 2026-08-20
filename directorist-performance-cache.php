@@ -3,7 +3,7 @@
  * Plugin Name: Directorist Performance Cache
  * Plugin URI: https://github.com/zamandevs/directorist-performance-cache
  * Description: Optional dependency-aware fallback page cache for Directorist.
- * Version: 0.3.0
+ * Version: 0.4.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * Author: Zaman Devs
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'DIRECTORIST_PERFORMANCE_CACHE_VERSION', '0.3.0' );
+define( 'DIRECTORIST_PERFORMANCE_CACHE_VERSION', '0.4.0' );
 define( 'DIRECTORIST_PERFORMANCE_CACHE_FILE', __FILE__ );
 define( 'DIRECTORIST_PERFORMANCE_CACHE_DIR', __DIR__ );
 
@@ -85,6 +85,41 @@ function directorist_performance_cache_controller() {
     }
 
     return $controller;
+}
+
+/** @return Directorist\Performance_Cache\Early_Config_Manager */
+function directorist_performance_cache_config_manager() {
+    static $config;
+
+    if ( ! $config instanceof Directorist\Performance_Cache\Early_Config_Manager ) {
+        $config = new Directorist\Performance_Cache\Early_Config_Manager( WP_CONTENT_DIR . '/cache/directorist-performance-cache/config.json' );
+    }
+
+    return $config;
+}
+
+/** @return Directorist\Performance_Cache\Performance_Integration */
+function directorist_performance_cache_performance_integration() {
+    static $integration;
+
+    if ( ! $integration instanceof Directorist\Performance_Cache\Performance_Integration ) {
+        $root        = WP_CONTENT_DIR . '/cache/directorist-performance-cache';
+        $integration = new Directorist\Performance_Cache\Performance_Integration(
+            directorist_performance_cache_controller(),
+            static function () {
+                return directorist_performance_cache_lifecycle();
+            },
+            static function () {
+                return directorist_performance_cache_config_manager();
+            },
+            static function () use ( $root ) {
+                return new Directorist\Performance_Cache\Cache_Inventory( $root );
+            },
+            'directorist_performance_cache_bump_lifecycle_generation'
+        );
+    }
+
+    return $integration;
 }
 
 /**
@@ -175,6 +210,7 @@ directorist_performance_cache_engine(
     ]
 )->register_wordpress_hooks();
 directorist_performance_cache_controller()->register_wordpress_hooks();
+directorist_performance_cache_performance_integration()->register_wordpress_hooks();
 register_activation_hook( __FILE__, 'directorist_performance_cache_activate' );
 register_deactivation_hook( __FILE__, 'directorist_performance_cache_deactivate' );
 register_uninstall_hook( __FILE__, 'directorist_performance_cache_uninstall' );

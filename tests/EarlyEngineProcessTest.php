@@ -50,6 +50,16 @@ final class Directorist_Performance_Cache_Early_Engine_Process_Test extends Test
         $this->assertSame( '|wordpress-booted|', $result['output'] );
     }
 
+    public function test_disabled_config_fails_open_before_serving_a_seeded_hit() {
+        $this->seed( '<!doctype html><html><body>must-not-serve</body></html>' );
+        $this->write_config( false );
+
+        $result = $this->run_dropin();
+
+        $this->assertSame( 0, $result['status'], $result['output'] );
+        $this->assertSame( '|wordpress-booted|', $result['output'] );
+    }
+
     private function seed( $body ) {
         $storage = new Cache_Storage( $this->cache_dir );
         $key     = ( new Request_Key() )->from_url( 'https://example.test/directory/' );
@@ -107,7 +117,7 @@ final class Directorist_Performance_Cache_Early_Engine_Process_Test extends Test
         ];
     }
 
-    private function write_config() {
+    private function write_config( $enabled = true ) {
         $config = [
             '_marker'        => 'DIRECTORIST PAGE CACHE CONFIG',
             'owner_id'       => 'Owner-ID: directorist-performance-cache',
@@ -120,6 +130,7 @@ final class Directorist_Performance_Cache_Early_Engine_Process_Test extends Test
             'ttl'            => 3600,
             'stale_ttl'      => 30,
             'debug'          => false,
+            'enabled'        => (bool) $enabled,
         ];
 
         file_put_contents( $this->cache_dir . '/config.json', json_encode( $config ) );

@@ -35,6 +35,9 @@ final class Runtime_Controller {
     /** @var callable */
     private $schedule_status;
 
+    /** @var callable */
+    private $reporter;
+
     /** @var bool */
     private $hooks_registered = false;
 
@@ -53,6 +56,11 @@ final class Runtime_Controller {
         $this->scheduler       = isset( $options['scheduler'] ) && is_callable( $options['scheduler'] ) ? $options['scheduler'] : [ $this, 'schedule_hook' ];
         $this->unscheduler     = isset( $options['unscheduler'] ) && is_callable( $options['unscheduler'] ) ? $options['unscheduler'] : [ $this, 'unschedule_hook' ];
         $this->schedule_status = isset( $options['schedule_status'] ) && is_callable( $options['schedule_status'] ) ? $options['schedule_status'] : [ $this, 'scheduled_at' ];
+        $this->reporter        = isset( $options['reporter'] ) && is_callable( $options['reporter'] ) ? $options['reporter'] : static function ( $level, $code, array $context ) {
+            if ( function_exists( 'directorist_page_cache_record_performance_event' ) ) {
+                directorist_page_cache_record_performance_event( $level, $code, $context );
+            }
+        };
         $this->worker          = new Warm_Worker( $queue, $requester, $this->successor );
         $this->engine->set_warm_handler( [ $this, 'enqueue' ] );
     }
@@ -76,12 +84,41 @@ final class Runtime_Controller {
 
     /** @return array */
     public function run_worker() {
-        return $this->worker->run( 3 );
+        $result = $this->worker->run( 3 );
+
+        if ( empty( $result['success'] ) ) {
+            $this->report( 'error', 'warm-worker-failed', [ 'code' => isset( $result['code'] ) ? $result['code'] : 'unknown' ] );
+        } elseif ( ! empty( $result['retried'] ) || ! empty( $result['failed'] ) || 'circuit_open' === $result['code'] ) {
+            $this->report(
+                'warning',
+                'warm-worker-retry',
+                [
+                    'retried' => isset( $result['retried'] ) ? (int) $result['retried'] : 0,
+                    'failed'  => isset( $result['failed'] ) ? (int) $result['failed'] : 0,
+                    'code'    => isset( $result['code'] ) ? $result['code'] : 'unknown',
+                ]
+            );
+        }
+
+        return $result;
     }
 
     /** @return array */
     public function run_cleanup() {
-        return $this->cleaner->run( 100 );
+        $result = $this->cleaner->run( 100 );
+
+        if ( empty( $result['success'] ) || ! empty( $result['errors'] ) ) {
+            $this->report(
+                empty( $result['success'] ) ? 'error' : 'warning',
+                'cache-cleanup-warning',
+                [
+                    'code'   => isset( $result['code'] ) ? $result['code'] : 'unknown',
+                    'errors' => isset( $result['errors'] ) ? (int) $result['errors'] : 0,
+                ]
+            );
+        }
+
+        return $result;
     }
 
     /** @return array */
@@ -335,6 +372,20 @@ final class Runtime_Controller {
             unset( $exception );
 
             return false;
+        }
+    }
+
+    /**
+     * @param string $level Event level.
+     * @param string $code Stable event code.
+     * @param array  $context Bounded context.
+     * @return void
+     */
+    private function report( $level, $code, array $context ) {
+        try {
+            call_user_func( $this->reporter, $level, $code, $context );
+        } catch ( \Throwable $exception ) {
+            unset( $exception );
         }
     }
 

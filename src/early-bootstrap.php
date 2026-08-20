@@ -7,6 +7,12 @@ if ( ! isset( $directorist_performance_cache_config ) || ! is_array( $directoris
     return false;
 }
 
+$GLOBALS['directorist_performance_cache_early_config'] = $directorist_performance_cache_config;
+
+if ( array_key_exists( 'enabled', $directorist_performance_cache_config ) && empty( $directorist_performance_cache_config['enabled'] ) ) {
+    return false;
+}
+
 $directorist_performance_cache_engine_file = isset( $directorist_performance_cache_config['engine_file'] )
     ? $directorist_performance_cache_config['engine_file']
     : '';
